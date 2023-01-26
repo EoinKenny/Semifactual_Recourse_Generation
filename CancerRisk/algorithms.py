@@ -1041,9 +1041,9 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 	# Necessary variables
 	REACH_KNN = KNeighborsClassifier(p=2).fit(X_train, y_train)
 	MAX_GENERATIONS = 20
-	LAMBDA1 = 30  # robustness e-neighborhood
+	LAMBDA1 = 10  # robustness e-neighborhood
 	LAMBDA2 = 10  # robustness instance
-	GAMMA = 1  # diversity
+	GAMMA = 10  # diversity
 	POSITIVE_CLASS = 1  # the semi-factual positive "loan accepted" class number
 	CONT_PERTURB_STD = 0.05 # perturb continuous features by 5% STD
 	MUTATION_RATE = 0.05
