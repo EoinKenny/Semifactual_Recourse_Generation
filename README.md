@@ -3,7 +3,11 @@ For Reviewers
 
 Hello,
 
-To help reproduce the results, we uploaded the CSV data files for the Breast Cancer dataset and the German Credit dataset.
+This repo contains all the code from our experiments.
+
+You will need to download the relevant datasets.
+
+However, to help reproduce some results faster, we did upload the CSV data files for the Breast Cancer dataset and the German Credit dataset.
 
 All you need to do is:
 
