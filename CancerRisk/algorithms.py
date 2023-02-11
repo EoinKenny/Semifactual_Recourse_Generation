@@ -42,7 +42,7 @@ def piece_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 		sample a random actionable feature index
 		"""
 		
-		feature_names = continuous_feature_names + categorical_feature_names
+		feature_names = continuous_features.columns.tolist() + categorical_features.columns.tolist()
 		actionable_idxs = list() 
 		
 		for i, f in enumerate(feature_names):
@@ -53,35 +53,61 @@ def piece_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 
 
 	action_meta = actionability_constraints()
+	df = get_dataset()
+	idx_train = np.load('data/training_idx.npy')
+	training = np.zeros(df.shape[0])
+	training[idx_train] = 1
+	df['training'] = training
 
-	df_train = pd.read_csv('data/df_train.csv')
-	df_test = pd.read_csv('data/df_test.csv')
+	target = df[TARGET_NAME]
+	del df[TARGET_NAME]
 
-	X_train = np.load('data/X_train.npy', )
-	X_test = np.load('data/X_test.npy', )
-	y_train = np.load('data/y_train.npy', )
-	y_test = np.load('data/y_test.npy', )
+	continuous_features = df[continuous_feature_names]
+	categorical_features = df[categorical_feature_names]
 
-	# ## Normalization
+	enc = OneHotEncoder().fit(categorical_features)
+	categorical_features_enc = enc.transform(categorical_features).toarray()
+
+	#### NB: Continuous features are first
+	data = np.concatenate((continuous_features.values, categorical_features_enc), axis=1)
+
+	df_train = df[df.training == 1]
+	df_test = df[df.training == 0]
+	df_train = df_train.reset_index(inplace=False, drop=True)
+	df_test = df_test.reset_index(inplace=False, drop=True)
+	del df_train['training']
+	del df_test['training']
+
+	X_train = data[(df.training == 1).values]
+	X_test = data[(df.training == 0).values]
+
+	y_train = target[(df.training == 1).values]
+	y_test = target[(df.training == 0).values]
+
 	scaler = MinMaxScaler().fit(X_train)
+
 	X_train = scaler.transform(X_train)
 	X_test = scaler.transform(X_test)
 
 
-	with open('data/enc.pkl', 'rb') as file:
-		enc = pickle.load(file)
-
-
 	# ## Generate Training Column Label
 	#### Logistic Regression
-	with open('data/clf.pkl', 'rb') as file:
-		clf = pickle.load(file)
+	clf = LogisticRegression(class_weight='balanced', fit_intercept=False, max_iter=1000).fit(X_train, y_train)
+
+
+	# In[18]:
+
 
 	test_preds = clf.predict(X_test)
 	train_preds = clf.predict(X_train)
 
+
+	# In[19]:
+
+
 	test_probs = clf.predict_proba(X_test)
 	train_probs = clf.predict_proba(X_train)
+
 
 	df_test['preds'] = test_preds
 	df_test['probs'] = test_probs.T[1]
@@ -91,8 +117,35 @@ def piece_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 
 
 	# # Make Counterfactual
+
+	# In[22]:
+
+
 	cf_df = df_train[(df_train.preds == 0)]
+
+
+	# In[23]:
+
+
 	preds = clf.predict(X_test)
+
+
+	# In[24]:
+
+
+	num_continuous = len(continuous_features.columns)
+
+
+	# In[25]:
+
+
+	# contributions = X_test[test_idx] * clf.coef_[0]
+	# final_conts_for_df = contributions[:num_continuous].tolist() + contributions[num_continuous:][contributions[num_continuous:] != 0 ].tolist()
+	# final_conts_for_df.append(np.nan)
+
+
+	# In[26]:
+
 
 	def find_nearest(array, value):
 		array = np.asarray(array)
@@ -100,13 +153,18 @@ def piece_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 		return array[idx]
 
 
+	# In[27]:
+
+
 	def get_prob_cat(cf_df, x):
 
 		cat_probabilities = list()
 		expected_values = list()
-		index_current = len(continuous_feature_names)
+		index_current = num_continuous
 
-		for i, cat in enumerate(categorical_feature_names):
+		for i, cat in enumerate(categorical_features.columns):
+	#         temp0 = df_train[df_train.GetCancer=='no'][cat]
+	#         temp1 = df_train[df_train.GetCancer=='yes'][cat]
 			temp0 = df_train[df_train.preds== 0][cat]
 			temp1 = df_train[df_train.preds== 1][cat]
 
@@ -114,6 +172,7 @@ def piece_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 			probs = list()
 			for cat2 in enc.categories_[i]:
 				probs.append( (temp0 == cat2).sum() / ((temp1 == cat2).sum()+0.0001) )
+	#             print(cat2, probs[-1])
 
 			probs = np.array(probs) / sum(probs)
 
@@ -130,6 +189,9 @@ def piece_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 		return cat_probabilities, expected_values
 
 
+	# In[28]:
+
+
 	def get_prob_cont(x):
 		"""
 		Returns probability of values from normal class, expected value
@@ -138,7 +200,7 @@ def piece_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 		cont_probs = list()
 		cont_expected = list()
 		
-		for i, cat in enumerate(continuous_feature_names):
+		for i, cat in enumerate(continuous_features.columns):
 			
 			# pick continuous feature (i.e., i), and positive cancer prediction (i.e., 1)
 			temp = X_train.T[i][train_preds == 1]
@@ -173,7 +235,7 @@ def piece_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 
 
 	def flip_category(x, cat_name='menopaus', change_to=1):
-		for i, cat in enumerate(categorical_feature_names):
+		for i, cat in enumerate(categorical_features.columns):
 			if cat == cat_name:
 				feature_rep = deepcopy(x[cat_idxs[i][0]: cat_idxs[i][1]])
 				feature_rep *= 0.
@@ -184,6 +246,8 @@ def piece_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 
 	def clip_expected_values(test_idx, expected_values, feature_names):
 		
+		# feature_names = con + cat order
+
 		# iterate each actionable feature
 		for idx, f in enumerate(feature_names):
 			if action_meta[f]['actionable']:
@@ -198,11 +262,19 @@ def piece_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 
 				# if expected value is lower than actionable range and you can't go down
 				if e_value < current_value and not action_meta[f]['can_decrease']:
+					# print('' )
+	#                 print('expected is lower than actionable range')
+					# print(f, current_value, expected_values[idx])
 					expected_values[idx] = current_value
+	#                 print("Change to:", expected_values[idx])
 
 				# opposite
 				if e_value > current_value and not action_meta[f]['can_increase']:
+					# print('' )
+	#                 print('expected is higher than actionable range')
+					# print(f, current_value, expected_values[idx])
 					expected_values[idx] = current_value
+	#                 print("Change to:", expected_values[idx])
 
 		return expected_values
 
@@ -215,15 +287,25 @@ def piece_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 
 		# Get feature probabilities
 		cont_probs, expected_conts, cat_probs, expected_cat = get_feature_probabilities(cf_df, test_idx)
+	#     print("Expected cat values1:", expected_cat)
+
 
 		feature_probs = np.array(cont_probs + cat_probs)
 		feature_expected = np.array(expected_conts + expected_cat)
-		features = continuous_feature_names + categorical_feature_names
+		features = continuous_features.columns.tolist() + categorical_features.columns.tolist()
+
+	#     xxxxx = deepcopy(feature_expected)
 		feature_expected = clip_expected_values(test_idx, feature_expected, features)
+	#     print(xxxxx - feature_expected)
+
 		feature_order = np.argsort(feature_probs)
+
 		original_prob = clf.predict_proba(X_test[test_idx].reshape(1,-1))[0][1]
 		current_prob = clf.predict_proba(X_test[test_idx].reshape(1,-1))[0][1]
 		original_pred = clf.predict(X_test[test_idx].reshape(1,-1)).item()
+		
+	#     print("Expected cat values2:", expected_cat)
+
 
 		# Flip the excpetional feature(s) one at a time:
 		for i in range(len(feature_order)):
@@ -242,6 +324,8 @@ def piece_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 				new_prob = clf.predict_proba(temp.reshape(1,-1))[0][1]
 				new_pred = clf.predict(temp.reshape(1,-1)).item()
 
+				# print("probs:", current_prob, new_prob)
+				
 				if new_pred != original_pred:
 					return temp, original_prob, current_prob
 
@@ -258,7 +342,7 @@ def piece_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 		"""
 		
 		cat_idxs = list()
-		start_idx = len(continuous_feature_names)
+		start_idx = len(continuous_features.columns)
 		for cat in enc.categories_:
 			cat_idxs.append([start_idx, start_idx + cat.shape[0]])
 			start_idx = start_idx + cat.shape[0]
@@ -266,8 +350,11 @@ def piece_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 
 
 	cat_idxs = generate_cat_idxs()
+
+
 	ga_df = pd.read_csv('data/GA_Xps_diverse.csv')
 	test_idxs = np.sort(np.array(ga_df.test_idx.value_counts().index.tolist()))
+
 	piece_sfs = list()
 
 	for test_idx in test_idxs:   # range(len(X_test)):
@@ -280,33 +367,53 @@ def piece_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 	np.save('data/piece_sfs.npy', piece_sfs)
 
 
+
+
+
+
+
+
+
+
+
+
+
 def dice_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 
 	action_meta = actionability_constraints()
 	df = get_dataset()
+	df_numeric = get_dataset()
 	numerical = continuous_feature_names
 
-	train_dataset = pd.read_csv('data/df_train.csv')
-	test_dataset = pd.read_csv('data/df_test.csv')
 
 	#### Need to add this text so that DiCE works
-	for f in train_dataset.columns:
+	for f in df_numeric.columns:
 		if f not in numerical and f != TARGET_NAME:
-			train_dataset[f] = train_dataset[f].astype(str) + '-Cat'
-	#### Need to add this text so that DiCE works
-	for f in test_dataset.columns:
-		if f not in numerical and f != TARGET_NAME:
-			test_dataset[f] = test_dataset[f].astype(str) + '-Cat'
+			df_numeric[f] = df_numeric[f].astype(str) + '-Cat'
 
-	y_train = np.load('data/y_train.npy', )
-	y_test = np.load('data/y_test.npy', )
-	x_train = deepcopy(train_dataset)
-	x_test = deepcopy(test_dataset)
-	train_dataset[TARGET_NAME] = y_train
-	test_dataset[TARGET_NAME] = y_test
+
+	idx_train = np.load('data/training_idx.npy')
+	training = np.zeros(df.shape[0])
+	training[idx_train] = 1
+	df_numeric['training'] = training
+
+
+	train_dataset = df_numeric[df_numeric.training==1]
+	test_dataset = df_numeric[df_numeric.training==0]
+
+	del train_dataset['training']
+	del test_dataset['training']
+
+
+	y_train = train_dataset[TARGET_NAME].values
+	y_test = test_dataset[TARGET_NAME].values
+
+	x_train = train_dataset.drop(TARGET_NAME, axis=1)
+	x_test = test_dataset.drop(TARGET_NAME, axis=1)
 
 
 	# ## DiCE
+
 	# Step 1: dice_ml.Data
 	d = dice_ml.Data(dataframe=train_dataset,
 					 continuous_features=continuous_feature_names,
@@ -328,9 +435,14 @@ def dice_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 			('all', normalizer_transformer, numerical),
 		])
 
+	# Append classifier to preprocessing pipeline.
+	# Now we have a full prediction pipeline.
 	clf = Pipeline(steps=[('preprocessor', transformations),
 						  ('classifier', LogisticRegression(class_weight='balanced', fit_intercept=False, max_iter=1000))])
 	model = clf.fit(x_train, y_train)
+
+
+	# In[16]:
 
 
 	def get_actionable_range(x):
@@ -347,6 +459,8 @@ def dice_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 					query_max_value = float(x[feature])
 					min_value = min([float(xxx) for xxx in pd.concat([x_train, x_test])[feature].values])
 					max_value = max([float(xxx) for xxx in pd.concat([x_train, x_test])[feature].values])
+	#                 print(query_min_value, query_max_value)
+	#                 print(min_value, max_value)
 				else:
 					query_min_value = int(x[feature][0])
 					query_max_value = int(x[feature][0])
@@ -360,9 +474,12 @@ def dice_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 				if action_meta[feature]['can_decrease']:
 					query_min_value = min_value
 					
+	#             print(query_min_value, query_max_value)
+
 				# If it is a continuous feature
 				if feature in numerical:
 					dice_action[feature] = [float(query_min_value), float(query_max_value)]
+
 				else:
 					dice_action[feature] = [str(x) + '-Cat' for x in list(range(query_min_value, query_max_value+1))]
 
@@ -370,20 +487,41 @@ def dice_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 
 
 	# ## Explanation Generation Loop
+
+	# In[17]:
+
+
 	# Using sklearn backend
 	m = dice_ml.Model(model=model, backend="sklearn")
 	# Using method=random for generating CFs
 	exp = dice_ml.Dice(d, m, method="random")
+
+
+	# In[18]:
+
+
 	original_preds = model.predict(x_test)
+
+
+	# In[19]:
+
+
 	failed = list()
+	# suceeded = list()
+
 	ga_df = pd.read_csv('data/GA_Xps_diverse.csv')
 	test_idxs = np.sort(np.array(ga_df.test_idx.value_counts().index.tolist()))
+
+	# print("xxxxxxx", test_idxs)
 
 	for ex_idx in test_idxs:
 
 		try:
+
 			x = x_test.iloc[ex_idx]
+
 			dice_action = get_actionable_range(x)
+
 			e3 = exp.generate_counterfactuals(
 											  x_test[ex_idx:ex_idx+1],
 											  total_CFs=DIVERSITY_SIZE,
@@ -395,6 +533,8 @@ def dice_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 			failed.append(0)
 
 		except:
+			# print('failed and making my own files')
+			# Fill in where files should be with placeholders
 			failed.append(1)
 			li = list()
 			for _ in range(DIVERSITY_SIZE):
@@ -403,27 +543,45 @@ def dice_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 				# print("length of file being dumped into pickel:", ex_idx, len(li))
 				pickle.dump(li, fp)
 
+
+
+
+
+
+
+
+
 	# ## Convert Test Data Back into original format to save df
 	for f in x_test.columns:
 		if f not in numerical:
 			x_test[f] = [int(xxx[:-4]) for xxx in x_test[f].values]
+
 	x_test.to_csv('DiCE_Xps/test_df.csv')
 
+
+
+
 	#### Convert Explanations
+
 	dice_cfs = list()
+
 	for ex_idx in test_idxs:  
+
 		with open('DiCE_Xps/test'+ str(ex_idx) +'.pkl', 'rb') as fp:
 			banana = pickle.load(fp)
+
 		for b in banana:
 			for i in range(len(b)):
 				if type(b[i]) == str:
 					b[i] = int(b[i][:-4])
 			dice_cfs.append([int(xxx) for xxx in b])
+
 		# for failed counterfactuals
 		if len(banana) < DIVERSITY_SIZE:
 			fill_in = DIVERSITY_SIZE - len(banana)
 			for _ in range(fill_in):
 				dice_cfs.append([int(xxx) for xxx in b])
+
 
 	dice_cfs = np.array(dice_cfs)
 	xp_df = pd.DataFrame(dice_cfs, columns=x_train.columns.tolist() + ['original_pred'])
@@ -434,7 +592,23 @@ def dice_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 		for _ in range(DIVERSITY_SIZE):
 			new_list.append(item)
 
+	# print(xp_df.shape, len(new_list))
 	xp_df['test_idx'] = new_list
+	
+
+
+
+	# # Now do cf generate again, to get semi-factual
+	# 
+	# Have the dfs of the testing and explanation data, need to
+	# 
+	# 1. Get conterfactuals for data again, but going backwards.
+	# 2. Just one per instance
+	# 3. Then use our notebook to convert to OHE etc. and evaluate explanations
+
+	# In[29]:
+
+
 	del xp_df['original_pred']
 	xp_df.to_csv('DiCE_Xps/xp_df.csv')
 
@@ -448,10 +622,17 @@ def dice_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 		if f not in numerical:
 			xp_df[f] = xp_df[f].astype(str) + '-Cat'
 
+
+	# In[32]:
+
+
 	found_sfs = list()
-	for ex_idx in test_idxs:
+
+	for ex_idx in test_idxs:  # range(len(x_test)):
+
 		x = x_test.iloc[ex_idx]
 		dice_action = get_actionable_range(x)
+
 		for idx, char in enumerate(list(string.ascii_lowercase)[:DIVERSITY_SIZE]):
 			instance = xp_df[x_test.columns][xp_df.test_idx==str(ex_idx)+'-Cat'][idx:idx+1]
 			try:
@@ -464,25 +645,46 @@ def dice_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 												 )
 				e3.visualize_as_list( str(ex_idx)+char )
 				found_sfs.append([ex_idx, char, 1])
+
 			except:
 				with open('DiCE_Xps/test' + str(ex_idx) + char + '.pkl', 'wb') as fp:
 					pickle.dump([instance.values.tolist()[0] + [1]], fp)
 				found_sfs.append([ex_idx, char, 0])
 
 
+
+
+
+
+
+					
+
+
 	#### Convert Explanations
+
 	dice_sfs = list()
+
 	for ex_idx in test_idxs:
+
 		for char in list(string.ascii_lowercase)[:DIVERSITY_SIZE]:
+
 			with open('DiCE_Xps/test' + str(ex_idx) + char + '.pkl', 'rb') as fp:
-				banana = pickle.load(fp)							
+				banana = pickle.load(fp)
+				
+			# print(len(banana))
+							
 			if len(np.array(banana).shape) == 3:
 				banana = banana[0]
+
 			for b in banana:
 				for i in range(len(b)):
 					if type(b[i]) == str:
 						b[i] = int(b[i][:-4])
+						
 			dice_sfs.append([int(xxx) for xxx in b])
+
+
+
 
 	dice_sfs = np.array(dice_sfs)
 
@@ -492,18 +694,46 @@ def dice_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 		for _ in range(DIVERSITY_SIZE):
 			failed_cf_list.append(item)
 
+	# dice_sfs.T[-1] = new_list
 	sf_df = pd.DataFrame(dice_sfs, columns=x_train.columns.tolist() + ['original_pred'])
 	sf_df['found_sf'] = [ int(x) for x in np.array(found_sfs)[:, -1]]
 	sf_df['failed_cf'] = failed_cf_list
-	sf_df['test_idx'] = new_list
+	sf_df['test_idx'] = new_list  # [ int(x) for x in np.array(found_sfs)[:, 0]]
 
 	# remove examples which couldn't make the explanation(s)
 	sf_df = sf_df[sf_df.found_sf==1]
 	sf_df = sf_df[sf_df.failed_cf==0]
 
-	# Remove indexs with less than m sfs found
+	# Remove indexs with less than 3 sfs found
 	sf_df = sf_df.groupby('test_idx').filter(lambda x : len(x)==DIVERSITY_SIZE)
 	sf_df.to_csv('data/dice_diverse.csv')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
@@ -524,42 +754,39 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 	df['training'] = training
 	np.save('data/training_idx.npy', idx_train)
 
-	## Name the Continuous & Categorical Features
+
+	# ## Name the Continuous & Categorical Features
 	continuous_features = df[continuous_feature_names]
 	categorical_features = df[categorical_feature_names]
+
 	enc = OneHotEncoder().fit(categorical_features)
 	categorical_features_enc = enc.transform(categorical_features).toarray()
 
-	with open('data/enc.pkl', 'wb') as file:
-		pickle.dump(enc, file)
-
 	#### NB: Continuous features are first
 	data = np.concatenate((continuous_features.values, categorical_features_enc), axis=1)
+
 	df_train = df[df.training == 1]
 	df_test = df[df.training == 0]
 	df_train = df_train.reset_index(inplace=False, drop=True)
 	df_test = df_test.reset_index(inplace=False, drop=True)
 	del df_train['training']
 	del df_test['training']
-	df_train.to_csv('data/df_train.csv')
-	df_test.to_csv('data/df_test.csv')
+
 	X_train = data[(df.training == 1).values]
 	X_test = data[(df.training == 0).values]
+
 
 	# ## Convert targets to 0 and 1
 	y_train = target[(df.training == 1).values]
 	y_test = target[(df.training == 0).values]
-	np.save('data/X_train.npy', X_train)
-	np.save('data/X_test.npy', X_test)
-	np.save('data/y_train.npy', y_train)
-	np.save('data/y_test.npy', y_test)
 
 	# ## Normalization
 	scaler = MinMaxScaler().fit(X_train)
 	X_train = scaler.transform(X_train)
 	X_test = scaler.transform(X_test)
 
-	## Modelling
+
+	# ## Modelling
 	#### Logistic Regression
 	clf = LogisticRegression(class_weight='balanced', fit_intercept=False, max_iter=1000).fit(X_train, y_train)
 	preds = clf.predict(X_test)
@@ -567,10 +794,8 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 	df_test['preds'] = preds
 	df_test['probs'] = probs.T[1]
 
-	with open('data/clf.pkl', 'wb') as file:
-		pickle.dump(clf, file)
 
-	## Genetic Algorithm
+	# ## Genetic Algorithm
 	def fitness(x, population, cat_idxs, actionable_idxs, clf, action_meta, continuous_features, categorical_features):
 		
 		fitness_scores = list()
@@ -595,14 +820,18 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 			robustness_2 *= LAMBDA2
 			diversity    *= GAMMA
 			
+			
 			term1 = (term1 + robustness_1 + robustness_2).mean()
 			
+			
+			# add up all the terms element wise, average, and return loss + diversity average
+			
+					
 			correctness = clf.predict(solution).mean()  # hard constraint that the solution MUST contain SF
 			fitness_scores.append( (term1 + diversity).item() * correctness )
 			meta_fitness.append( [reachability.mean(), gain.mean(), robustness_1.mean(), robustness_2.mean(), diversity] )
 		
 		return np.array(fitness_scores), np.array(meta_fitness)
-
 
 	def get_diversity(solution):
 		"""
@@ -724,6 +953,7 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 				break    
 		starting_index = i
 				
+		# we don't care about continuous features
 		for idx, i in enumerate(list(range(starting_index, len(actionable_idxs)))):
 					
 			sl = x[ cat_idxs[idx][0] : cat_idxs[idx][1] ]
@@ -747,6 +977,7 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 	def perturb_one_random_feature(x, x_prime, continuous_features, categorical_features, action_meta, cat_idxs, actionable_idxs):
 		"""
 		perturb one actionable feature for MC robustness optimization
+		Really just for Monte Carlo Approximation Robustness
 		"""
 		
 		feature_names = continuous_features.columns.tolist() + categorical_features.columns.tolist()
@@ -857,6 +1088,7 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 					
 				except:
 					new = new_rep
+
 			else:
 				new = new_rep  
 				
@@ -930,10 +1162,15 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 		
 		for i in range(len(population)):
 			for j in range(DIVERSITY_SIZE):
+				
 				x_prime = population[i][j]
+				
 				for k in range(len(actionable_idxs)):
+					
 					if np.random.rand() < MUTATION_RATE:
+
 						change_idx = actionable_idxs[k][0]
+						
 						# if categorical feature
 						if feature_names[change_idx] in categorical_features.columns:
 							perturbed_feature = generate_category(x,
@@ -942,6 +1179,7 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 																  cat_idxs,
 																  action_meta,
 																  replace=False)
+
 							x_prime[cat_idxs[change_idx-len(continuous_features.columns)][0]: cat_idxs[change_idx-len(continuous_features.columns)][1]] = perturbed_feature
 
 						# if continuous feature
@@ -952,6 +1190,7 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 														  continuous_features,
 														  categorical_features,
 														  action_meta)                
+
 		return population
 
 
@@ -961,10 +1200,13 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 		"""
 		
 		tournamet_winner_idxs = list()
+		
 		for i in range(POPULATION_SIZE - ELITIST):
+		
 			knights = np.random.randint(0, population.shape[0], 2)
 			winner_idx = knights[np.argmax(fitness_scores[knights])]
 			tournamet_winner_idxs.append(winner_idx)
+			
 		return population[tournamet_winner_idxs], population[(-fitness_scores).argsort()[:ELITIST]]
 
 
@@ -1012,6 +1254,7 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 							cat_idx = actionable_idxs[k][0] - len(continuous_features.columns)
 							child2[j][cat_idxs[cat_idx][0]: cat_idxs[cat_idx][1]] = parent1[j][cat_idxs[cat_idx][0]: cat_idxs[cat_idx][1]]
 
+
 			children.append(child1.tolist())
 			children.append(child2.tolist())
 		
@@ -1019,20 +1262,28 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 
 
 	def force_sf(result):
+		
 		result_preds = clf.predict(result)
+
 		keep = np.where(result_preds==abs(POSITIVE_CLASS))[0]
+			
 		sf = result[keep[0]]
 		replace_these_idxs = np.where(result_preds==abs(POSITIVE_CLASS-1))[0]
+		
 		for idx in replace_these_idxs:
 			result[idx] = sf
+
 		return result
 
-	# just for lending club so speed up NN searches
+
+
 	if X_train.shape[0] > 885300:
+
 		_, X_train, _, y_train = train_test_split(X_train, 
 													y_train,
 													test_size=0.05, 
 													random_state=42)
+
 
 	action_meta = actionability_constraints()
 	cat_idxs = generate_cat_idxs()
@@ -1041,14 +1292,22 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 	# Necessary variables
 	REACH_KNN = KNeighborsClassifier(p=2).fit(X_train, y_train)
 	MAX_GENERATIONS = 20
+	# POPULATION_SIZE = (3 * DIVERSITY_SIZE * len(actionable_idxs))
+	# POPULATION_SIZE += POPULATION_SIZE % 2
+	# POPULATION_SIZE *= 4
+
 	LAMBDA1 = 10  # robustness e-neighborhood
 	LAMBDA2 = 10  # robustness instance
 	GAMMA = 10  # diversity
+
 	POSITIVE_CLASS = 1  # the semi-factual positive "loan accepted" class number
 	CONT_PERTURB_STD = 0.05 # perturb continuous features by 5% STD
 	MUTATION_RATE = 0.05
 	ELITIST = 4  # how many of the "best" to save
 	MAX_MC = 100
+
+
+
 
 	sf_data = list()
 	found_sfs = list()
@@ -1058,7 +1317,7 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 	for test_idx in range(X_test.shape[0]):
 
 		start_time = time.time()
-		
+			
 		x = X_test[test_idx]
 		x_prime = deepcopy(x)
 
@@ -1067,9 +1326,12 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 
 		# this while loop exists so that the initial population has at least one semifactual
 		avg_preds = 0.0
+		# print(test_idx)
 		counter_xxx = 0
 		while avg_preds < 0.3:
 			counter_xxx += 1
+			# print(counter_xxx)
+			# Randomly initialise population 
 			population = init_population(x, X_train, continuous_features, categorical_features, action_meta, replace=True)
 			avg_preds = clf.predict(population.reshape(-1, x.shape[0])).mean()
 			if counter_xxx == 100:
@@ -1102,6 +1364,8 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 												  actionable_idxs, clf, action_meta,
 												  continuous_features, categorical_features)
 
+			# print(max(fitness_scores))
+
 		result = population[np.argmax( fitness_scores )]        
 		logging.info( str(time.time() - start_time) )
 		if sum(fitness_scores * (meta_fitness.T[-2] == LAMBDA2)) > 0:
@@ -1114,12 +1378,18 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 			for d in result:
 				sf_data.append( d.tolist() )
 			found_sfs.append([test_idx, False])
+			# final_preds = clf.predict(result)
+			# fails_to_find_sfs += 1
 
+		# print(len(sf_data))
 		print("Took Sec:", round(time.time() - start_time, 2))
+		# print(meta_fitness)
 		if len(sf_data) == max_num_samples*DIVERSITY_SIZE:
 			print("Acquired number of test instances specified")
 			break
 
+
+			
 	sf_data = np.array(sf_data)
 	np.save('data/GA_sfs.npy', sf_data)
 	success_data = list()
@@ -1135,6 +1405,10 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 	sf_df = pd.DataFrame(sf_data)
 	sf_df['test_idx'] = idx_data
 	sf_df['sf_found'] = success_data
+
+	# if DIVERSITY_SIZE == 1:
+	# 	sf_df.to_csv('data/GA_Xps_single.csv')
+	# if DIVERSITY_SIZE > 1:
 	sf_df.to_csv('data/GA_Xps_diverse.csv')
 
 

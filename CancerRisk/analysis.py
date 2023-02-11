@@ -5,7 +5,6 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import pdb    
 import os    
-import pickle 
 
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, confusion_matrix
@@ -72,8 +71,10 @@ def analysis(DIVERSITY_SIZE):
 	POSITIVE_CLASS = 1
 	MAX_MC = 100
 
-	with open('data/enc.pkl', 'rb') as file:
-		enc = pickle.load(file)
+	continuous_features = continuous_feature_names
+	categorical_features = categorical_feature_names
+
+
 
 	# ## Robustness Function
 
@@ -118,6 +119,8 @@ def analysis(DIVERSITY_SIZE):
 			
 				perturbed_instance = perturb_one_random_feature(x, 
 																x_prime_clone,
+																df[continuous_features],
+																df[categorical_features],
 																action_meta,
 																cat_idxs,
 																actionable_idxs)
@@ -149,34 +152,36 @@ def analysis(DIVERSITY_SIZE):
 	# In[97]:
 
 
-	def perturb_one_random_feature(x, x_prime, action_meta, cat_idxs, actionable_idxs):
+	def perturb_one_random_feature(x, x_prime, continuous_features, categorical_features, action_meta, cat_idxs, actionable_idxs):
 		"""
 		perturb one actionable feature for MC robustness optimization
 		Really just for Monte Carlo Approximation Robustness
 		"""
 		
-		feature_names = continuous_feature_names + categorical_feature_names
+		feature_names = continuous_features.columns.tolist() + categorical_features.columns.tolist()
 		change_idx    = get_rand_actionable_feature_idx(x, actionable_idxs, cat_idxs)[0]
 		feature_num   = len(feature_names)
 		
 	#     print("Changing feature:", change_idx)
 		
 		# if categorical feature
-		if feature_names[change_idx] in categorical_feature_names:
+		if feature_names[change_idx] in categorical_features.columns:
 			perturbed_feature = generate_category(x,
 												  x_prime,
-												  change_idx-len(continuous_feature_names),  # index of category for function
+												  change_idx-len(continuous_features.columns),  # index of category for function
 												  cat_idxs,
 												  action_meta,
 												  replace=False)
 			
-			x_prime[cat_idxs[change_idx-len(continuous_feature_names)][0]: cat_idxs[change_idx-len(continuous_feature_names)][1]] = perturbed_feature
+			x_prime[cat_idxs[change_idx-len(continuous_features.columns)][0]: cat_idxs[change_idx-len(continuous_features.columns)][1]] = perturbed_feature
 
 		# if continuous feature
 		else:
 			x_prime = perturb_continuous(x, 
 										  x_prime, 
 										  change_idx,
+										  continuous_features,
+										  categorical_features,
 										  action_meta)
 
 		return x_prime
@@ -191,7 +196,7 @@ def analysis(DIVERSITY_SIZE):
 		"""
 		
 		cat_idxs = list()
-		start_idx = len(continuous_feature_names)
+		start_idx = len(df[continuous_features].columns)
 		for cat in enc.categories_:
 			cat_idxs.append([start_idx, start_idx + cat.shape[0]])
 			start_idx = start_idx + cat.shape[0]
@@ -200,12 +205,12 @@ def analysis(DIVERSITY_SIZE):
 
 
 
-	def get_actionable_feature_idxs():
+	def get_actionable_feature_idxs(continuous_features, categorical_features):
 		"""
 		sample a random actionable feature index
 		"""
 		
-		feature_names = continuous_feature_names + categorical_feature_names
+		feature_names = continuous_features.columns.tolist() + categorical_features.columns.tolist()
 		actionable_idxs = list() 
 		
 		for i, f in enumerate(feature_names):
@@ -275,7 +280,7 @@ def analysis(DIVERSITY_SIZE):
 		original_rep = x[cat_idxs[idx][0]: cat_idxs[idx][1]]  # To constrain with initial datapoint
 		new_rep = x_prime[cat_idxs[idx][0]: cat_idxs[idx][1]]  # to make sure we modify based on new datapoint
 		
-		cat_name = categorical_feature_names[idx]
+		cat_name = df[categorical_features].columns[idx]
 		
 		if replace:  # just for population initialisation
 
@@ -341,13 +346,13 @@ def analysis(DIVERSITY_SIZE):
 	# In[102]:
 
 
-	def perturb_continuous(x, x_prime, idx, action_meta):
+	def perturb_continuous(x, x_prime, idx, continuous_features, categorical_features, action_meta):
 		"""
 		slightly perturb continuous feature with actionability constraints
 		"""
 		
 		# Get feature max and min -- and clip it to these
-		feature_names = continuous_feature_names + categorical_feature_names
+		feature_names = continuous_features.columns.tolist() + categorical_features.columns.tolist()
 		cat_name = feature_names[idx]
 		
 		if action_meta[cat_name]['can_increase'] and action_meta[cat_name]['can_decrease']:
@@ -379,17 +384,29 @@ def analysis(DIVERSITY_SIZE):
 
 
 	action_meta = actionability_constraints()
+	df = get_dataset()
+	target = df[TARGET_NAME].values
+	del df[TARGET_NAME]
+	idx_train = np.load('data/training_idx.npy')
+	training = np.zeros(df.shape[0])
+	training[idx_train] = 1
+	df['training'] = training
 
-	df_train = pd.read_csv('data/df_train.csv')
-	df_test = pd.read_csv('data/df_train.csv')
+	enc = OneHotEncoder().fit( df[categorical_features] )
+	categorical_features_enc = enc.transform(df[categorical_features]).toarray()
 
-	X_train = np.load('data/X_train.npy', )
-	X_test = np.load('data/X_test.npy', )
-	y_train = np.load('data/y_train.npy', )
-	y_test = np.load('data/y_test.npy', )
+	#### NB: Continuous features are first
+	data = np.concatenate(( df[continuous_features].values, categorical_features_enc), axis=1)
 
-	# ## Normalization
-	scaler = MinMaxScaler().fit(X_train)
+	df_train = df[df.training == 1]
+	df_test = df[df.training == 0]
+	df_train = df_train.reset_index(inplace=False, drop=True)
+	df_test = df_test.reset_index(inplace=False, drop=True)
+	del df_train['training']
+	del df_test['training']
+	X_train = data[(df.training == 1).values]
+	X_test = data[(df.training == 0).values]
+	scaler = MinMaxScaler().fit(data)
 	X_train = scaler.transform(X_train)
 	X_test = scaler.transform(X_test)
 
@@ -404,14 +421,19 @@ def analysis(DIVERSITY_SIZE):
 	test_idxs1 = np.sort(np.array(ga_df.test_idx.value_counts().index.tolist()))
 	test_idxs2 = np.sort(np.array(dice_df.test_idx.value_counts().index.tolist()))
 	test_idxs = sorted(list(set(test_idxs1) & set(test_idxs2)))
-
 	ga_df = ga_df[ga_df.test_idx.isin(test_idxs)]
 
-	# Filter PIECE Data
+
+
+	# print(piece_data.shape)
+
 	piece_idxs_filter = np.zeros(len(test_idxs1))
+
 	for i in range(len(test_idxs2)):
 		piece_idxs_filter += test_idxs1 == test_idxs2[i]
+
 	piece_data = piece_data[piece_idxs_filter.astype(bool)]   
+	# print(piece_data.shape)
 
 
 
@@ -426,14 +448,12 @@ def analysis(DIVERSITY_SIZE):
 	if dice_failed:
 		dice_data = deepcopy(ga_data)
 
+	y_train = target[(df.training == 1).values]
 	REACH_KNN = KNeighborsClassifier(p=2).fit(X_train, y_train)
 	cat_idxs = generate_cat_idxs()
 	action_meta = actionability_constraints()
-
-	with open('data/clf.pkl', 'rb') as file:
-		clf = pickle.load(file)
-
-	actionable_idxs = get_actionable_feature_idxs()
+	clf = LogisticRegression(class_weight='balanced', fit_intercept=False).fit(X_train, y_train)
+	actionable_idxs = get_actionable_feature_idxs(df[continuous_features], df[categorical_features])
 
 
 	gain = list()
@@ -441,7 +461,72 @@ def analysis(DIVERSITY_SIZE):
 	reachability = list()
 	robustness = list()
 	failed_sf = list()
+	sparsity = list() 
+	feature_variety = list()
 
+
+
+	def get_sparsity(query, sfs):
+
+		sparsity = list()
+		full_sparsity = list()
+
+		# if len(np.array(sfs).shape) == 1:
+		# 	sfs = np.array([sfs])
+		# query = np.array(query)
+		# print(query)
+		# print(sfs)
+
+		for i in range(len(sfs)):
+			sf = sfs[i]
+			sf = reverse_eng(sf)
+			num_changed = sum(np.array(sf) - np.array(reverse_eng(query)) != 0)
+			sparsity.append(num_changed)
+			full_sparsity.append( ((np.array(sf) - np.array(reverse_eng(query)) != 0) * 1).tolist() )
+
+		full_sparsity = np.array(full_sparsity)
+		return sparsity, full_sparsity
+
+	def reverse_eng(inst):
+		return scaler.inverse_transform(inst.reshape(1,-1))[0][:len(continuous_feature_names)].tolist() + enc.inverse_transform(inst[len(continuous_feature_names):].reshape(1,-1))[0].tolist()
+
+
+	def qual_diverse(feature_variety):
+		dist1 = list()
+		dist2 = list()
+
+		for i in range(feature_variety.shape[0]):  # instances
+			for j in range(feature_variety.shape[1]):  # method
+				if j == 0:
+					dist1.append(feature_variety[i][j].sum(axis=0).tolist())
+				if j == 1:
+					dist2.append(feature_variety[i][j].sum(axis=0).tolist())
+					
+		dist1 = np.array(dist1).reshape(-1, feature_variety.shape[-1]).sum(axis=0)
+		dist2 = np.array(dist2).reshape(-1, feature_variety.shape[-1]).sum(axis=0)
+
+		return dist1, dist2
+
+
+	def qual_single(feature_variety):
+		dist1 = list()
+		dist2 = list()
+		dist3 = list()
+
+		for i in range(feature_variety.shape[0]):  # instances
+			for j in range(feature_variety.shape[1]):  # method
+				if j == 0:
+					dist1.append(feature_variety[i][j].sum(axis=0).tolist())
+				if j == 1:
+					dist2.append(feature_variety[i][j].sum(axis=0).tolist())
+				if j == 2:
+					dist3.append(feature_variety[i][j].sum(axis=0).tolist())
+					
+		dist1 = np.array(dist1).reshape(-1, feature_variety.shape[-1]).sum(axis=0)
+		dist2 = np.array(dist2).reshape(-1, feature_variety.shape[-1]).sum(axis=0)
+		dist3 = np.array(dist3).reshape(-1, feature_variety.shape[-1]).sum(axis=0)
+
+		return dist1, dist2, dist3
 
 
 	if DIVERSITY_SIZE > 1:
@@ -476,16 +561,16 @@ def analysis(DIVERSITY_SIZE):
 					   cat_idxs,
 					   actionable_idxs,
 					   action_meta,
-					   continuous_feature_names,
-					   categorical_feature_names)
+					   continuous_features,
+					   categorical_features)
 			dice_rob = get_robustness(query,
 					   dice_sfs,
 					   clf,
 					   cat_idxs,
 					   actionable_idxs,
 					   action_meta,
-					   continuous_feature_names,
-					   categorical_feature_names)
+					   continuous_features,
+					   categorical_features)
 
 			if t_idx not in dice_df.test_idx.values or dice_failed: dice_rob = np.nan
 			robustness.append([ga_rob, dice_rob])
@@ -511,7 +596,6 @@ def analysis(DIVERSITY_SIZE):
 			ga_sfs = ga_data[ (idx) : (idx)+1 ]
 			piece_sfs = piece_data[ (idx) : (idx)+1 ]
 			dice_sfs = dice_data[ (idx) : (idx)+1 ]
-
 			
 			# Gain
 			ga_gain = get_gain(query, ga_sfs)
@@ -533,7 +617,7 @@ def analysis(DIVERSITY_SIZE):
 			dice_reach = get_reachability(dice_sfs)
 			if t_idx not in dice_df.test_idx.values or dice_failed: dice_reach = np.nan
 			reachability.append([ga_reach, dice_reach, piece_reach])
-
+			
 			# Robustness
 			ga_rob = get_robustness(query,
 					   ga_sfs,
@@ -541,24 +625,24 @@ def analysis(DIVERSITY_SIZE):
 					   cat_idxs,
 					   actionable_idxs,
 					   action_meta,
-					   continuous_feature_names,
-					   categorical_feature_names)
+					   continuous_features,
+					   categorical_features)
 			piece_rob = get_robustness(query,
 					   piece_sfs,
 					   clf,
 					   cat_idxs,
 					   actionable_idxs,
 					   action_meta,
-					   continuous_feature_names,
-					   categorical_feature_names)
+					   continuous_features,
+					   categorical_features)
 			dice_rob = get_robustness(query,
 					   dice_sfs,
 					   clf,
 					   cat_idxs,
 					   actionable_idxs,
 					   action_meta,
-					   continuous_feature_names,
-					   categorical_feature_names)
+					   continuous_features,
+					   categorical_features)
 
 			if t_idx not in dice_df.test_idx.values or dice_failed: dice_rob = np.nan
 			robustness.append([ga_rob, dice_rob, piece_rob])
@@ -570,6 +654,7 @@ def analysis(DIVERSITY_SIZE):
 		reachability = np.array(reachability)
 		robustness = np.array(robustness)
 		failed_sf = np.array(failed_sf)
+
 
 		return [gain.T[0].mean(), gain.T[1].mean(), gain.T[2].mean()], [diversity.T[0].mean(), diversity.T[1].mean(), diversity.T[2].mean()], [reachability.T[0].mean(), reachability.T[1].mean(), reachability.T[2].mean()], [robustness.T[0].mean(), robustness.T[1].mean(), robustness.T[2].mean()], [failed_sf.T[0].mean(), failed_sf.T[1].mean(), failed_sf.T[2].mean()]
 

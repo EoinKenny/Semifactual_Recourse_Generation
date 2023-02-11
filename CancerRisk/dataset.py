@@ -183,7 +183,7 @@ def actionability_constraints():
 
      'brstproc': {'actionable': True,
       'min': 0,
-      'max': 1, 
+      'max': 1,
       'can_increase': False,
       'can_decrease': True},
 
