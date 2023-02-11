@@ -24,9 +24,9 @@ def main():
 		print(" ")
 		print(" =================================== ")
 
-		random_seeds = list(range(3))
+		random_seeds = list(range(30))
 		data = list()
-		max_num_samples = 30 # max number of test instances to do
+		max_num_samples = 3 # max number of test instances to do
 		POP_SIZE = POP_SIZES[idx]
 
 		for seed in random_seeds:

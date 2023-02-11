@@ -379,6 +379,8 @@ def dice_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 	ga_df = pd.read_csv('data/GA_Xps_diverse.csv')
 	test_idxs = np.sort(np.array(ga_df.test_idx.value_counts().index.tolist()))
 
+	# pdb.set_trace()
+
 	for ex_idx in test_idxs:
 
 		try:
@@ -402,6 +404,8 @@ def dice_algorithm(seed, DIVERSITY_SIZE, max_num_samples):
 			with open('DiCE_Xps/test' + str(ex_idx) + '.pkl', 'wb') as fp:
 				# print("length of file being dumped into pickel:", ex_idx, len(li))
 				pickle.dump(li, fp)
+
+
 
 	# ## Convert Test Data Back into original format to save df
 	for f in x_test.columns:

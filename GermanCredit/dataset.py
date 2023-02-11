@@ -302,17 +302,17 @@ def actionability_constraints():
       'can_increase': False,
       'can_decrease': False},
 
-     'status': {'actionable': False,
+     'status': {'actionable': True,
       'min': 0,
       'max': 1,
       'can_increase': False,
-      'can_decrease': False},
+      'can_decrease': True},
 
-     'credit_history': {'actionable': False,
+     'credit_history': {'actionable': True,
       'min': 0,
       'max': 1,
       'can_increase': False,
-      'can_decrease': False},
+      'can_decrease': True},
 
      'purpose': {'actionable': False,
       'min': 0,
@@ -326,11 +326,11 @@ def actionability_constraints():
       'can_increase': False,
       'can_decrease': True},
 
-     'employment_duration': {'actionable': False,
+     'employment_duration': {'actionable': True,
       'min': 0,
       'max': 1,
       'can_increase': False,
-      'can_decrease': False},
+      'can_decrease': True},
 
      'installment_rate': {'actionable': True,
       'min': 0,
@@ -344,53 +344,53 @@ def actionability_constraints():
       'can_increase': False,
       'can_decrease': False},
 
-     'other_debtors': {'actionable': False,
+     'other_debtors': {'actionable': True,
       'min': 0,
       'max': 1,
-      'can_increase': False,
+      'can_increase': True,
       'can_decrease': False},
 
-     'present_residence': {'actionable': False,
+     'present_residence': {'actionable': True,
       'min': 0,
       'max': 1,
       'can_increase': False,
+      'can_decrease': True},
+
+     'property': {'actionable': True,
+      'min': 0,
+      'max': 1,
+      'can_increase': False,
+      'can_decrease': True},
+
+     'other_installment_plans': {'actionable': True,
+      'min': 0,
+      'max': 1,
+      'can_increase': False,
+      'can_decrease': True},
+
+     'housing': {'actionable': True,
+      'min': 0,
+      'max': 1,
+      'can_increase': False,
+      'can_decrease': True},
+
+     'number_credits': {'actionable': True,  # flip
+      'min': 0,
+      'max': 1,
+      'can_increase': True,
       'can_decrease': False},
 
-     'property': {'actionable': False,
+     'job': {'actionable': True,
       'min': 0,
       'max': 1,
       'can_increase': False,
-      'can_decrease': False},
+      'can_decrease': True},
 
-     'other_installment_plans': {'actionable': False,
+     'people_liable': {'actionable': True, 
       'min': 0,
       'max': 1,
       'can_increase': False,
-      'can_decrease': False},
-
-     'housing': {'actionable': False,
-      'min': 0,
-      'max': 1,
-      'can_increase': False,
-      'can_decrease': False},
-
-     'number_credits': {'actionable': False,  # flip
-      'min': 0,
-      'max': 1,
-      'can_increase': False,
-      'can_decrease': False},
-
-     'job': {'actionable': False,
-      'min': 0,
-      'max': 1,
-      'can_increase': False,
-      'can_decrease': False},
-
-     'people_liable': {'actionable': False, 
-      'min': 0,
-      'max': 1,
-      'can_increase': False,
-      'can_decrease': False},
+      'can_decrease': True},
 
      'telephone': {'actionable': False,
       'min': 0,
@@ -406,6 +406,5 @@ def actionability_constraints():
     }
     
     return meta_action_data
-
 
 
