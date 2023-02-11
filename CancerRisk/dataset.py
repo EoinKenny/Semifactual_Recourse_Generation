@@ -181,11 +181,11 @@ def actionability_constraints():
       'can_increase': False,
       'can_decrease': True},
 
-     'brstproc': {'actionable': False,
+     'brstproc': {'actionable': True,
       'min': 0,
       'max': 1, 
       'can_increase': False,
-      'can_decrease': False},
+      'can_decrease': True},
 
      'hrt': {'actionable': True,
       'min': 0,
