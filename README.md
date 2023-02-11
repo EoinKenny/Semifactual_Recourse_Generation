@@ -27,6 +27,8 @@ python main.py
 ```
 And the results will reproduce. 
 
+YOu need to make a figs and DiCE_Xps folder in each dataset directory before running the main.py file.
+
 You can view them in the Figs folder, but note they will be lineplots instead of the type in the paper.
 
 
