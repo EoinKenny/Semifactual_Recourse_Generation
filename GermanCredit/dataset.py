@@ -284,10 +284,10 @@ def actionability_constraints():
     #### based on common sense actionable directions
     
     meta_action_data =  {
-     'duration': {'actionable': False,
+     'duration': {'actionable': True,
       'min': 0,
       'max': 1,
-      'can_increase': False,
+      'can_increase': True,
       'can_decrease': False},
 
      'amount': {'actionable': True,
