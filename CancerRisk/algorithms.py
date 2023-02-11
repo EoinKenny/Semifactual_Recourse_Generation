@@ -1062,7 +1062,7 @@ def genetic_algorithm(seed, DIVERSITY_SIZE, max_num_samples, POPULATION_SIZE):
 		x = X_test[test_idx]
 		x_prime = deepcopy(x)
 
-		if clf.predict_proba(x.reshape(1,-1))[0][1] < 0.8:
+		if clf.predict_proba(x.reshape(1,-1))[0][1] < 0.5:
 			continue
 
 		# this while loop exists so that the initial population has at least one semifactual
