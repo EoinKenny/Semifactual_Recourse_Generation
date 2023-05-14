@@ -19,6 +19,10 @@ conda install -c anaconda seaborn
 conda install -c anaconda scikit-learn
 conda install -c conda-forge tqdm
 conda install -c conda-forge jsonschema
+conda install -c conda-forge imbalanced-learn
+conda install pytorch::pytorch torchvision torchaudio -c pytorch
+conda install -c conda-forge tensorboard
+conda install -c conda-forge cvxpy
 ```
 
 Then change into either the breast cancer folder of the german credit folder and run
