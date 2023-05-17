@@ -34,5 +34,7 @@ python run_benchmarks.py
 
 And again the results will reproduce.
 
+Note our code for the causal tests is heavily borrowed from "https://github.com/ricardodominguez/adversariallyrobustrecourse"
+
 Thanks,
 Anon Author(s)
