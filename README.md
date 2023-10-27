@@ -1,11 +1,24 @@
-# NeurIPS_2023
-For Reviewers
+# Semifactual Recourse Generation (S-GEN) - NeurIPS-2023
 
-Hello,
+![alt text](graphics/title.pdf "Title")
 
-This repo contains all the code from our experiments.
 
-All you need to do is:
+
+This is the repository for the paper *"The Utility of "Even if..." Semifactual Explanation to Optimise Positive Outcomes*[^1].
+
+The paper was published at NeurIPS 2023, New Orleans, U.S.A., see paper [here](https://openreview.net/forum?id=R6wXP7txer).
+
+The paper proposes...
+
+In the above figure for example...
+
+This repo uses a lot of the code from Dominguez et al.[^2].
+
+--------------
+
+## Experiments
+
+To reproduce these results run:
 
 ```
 conda create --name semifactual
@@ -32,11 +45,34 @@ For the causal tests just run
 python run_benchmarks.py
 ```
 
-And again the results will reproduce.
+And the terminal will print off the results, reproducing the results for Car Racing from the paper.
 
-Note our code for the causal tests is heavily borrowed from "https://github.com/ricardodominguez/adversariallyrobustrecourse"
+------------------------
+
+## Contact
+
+For any questions or comments, please email ekenny@mit.edu.
+
+-------------------------
+
+### Bibtex
+
+```
+@inproceedings{
+kennyHuangEvenIf,
+title={The Utility of {\textquotedblleft}Even if{\textquotedblright} Semi-Factual Explanation to Optimise Positive Outcomes},
+author={Kenny, E.M., Huang, W.},
+booktitle={Thirty-seventh Conference on Neural Information Processing Systems},
+year={2023},
+url={https://openreview.net/forum?id=R6wXP7txer}
+}
+```
+
+
+[^1]: Kenny, E.M., Huang, W., The Utility of "Even if..." Semifactual Explanation to Optimise Positive Outcomes. In *Thirty-seventh Conference on Neural Information Processing Systems.* New Orleans, U.S.A., 2023.
+
+[^2]: https://github.com/ricardodominguez/adversariallyrobustrecourse
 
 
 
-Thanks,
-Anon Author(s)
+
