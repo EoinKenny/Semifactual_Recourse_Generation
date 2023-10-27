@@ -1,6 +1,6 @@
 # Semifactual Recourse Generation (S-GEN) - NeurIPS-2023
 
-![alt text](graphics/title.png "Title")
+![alt text](imgs/title.png "Title")
 
 
 
